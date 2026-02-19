@@ -185,17 +185,27 @@ class PolymarketTraderV4:
         
         self.save_market_history()
     
-    def get_market_price(self, market_id: str) -> Optional[float]:
-        """Fetch YES price"""
-        try:
-            response = self.session.get(f"{POLYMARKET_API}/markets/{market_id}", timeout=10)
-            response.raise_for_status()
-            market = response.json()
-            outcome_prices_str = market.get("outcomePrices", "[]")
-            outcome_prices = json.loads(outcome_prices_str) if isinstance(outcome_prices_str, str) else outcome_prices_str
-            return float(outcome_prices[0]) if outcome_prices else None
-        except:
-            return None
+    def get_market_price(self, market_id: str, max_retries: int = 3) -> Optional[float]:
+        """Fetch YES price with exponential backoff on failure"""
+        import time
+        
+        for retry in range(max_retries):
+            try:
+                response = self.session.get(f"{POLYMARKET_API}/markets/{market_id}", timeout=10)
+                response.raise_for_status()
+                market = response.json()
+                outcome_prices_str = market.get("outcomePrices", "[]")
+                outcome_prices = json.loads(outcome_prices_str) if isinstance(outcome_prices_str, str) else outcome_prices_str
+                return float(outcome_prices[0]) if outcome_prices else None
+            except Exception as e:
+                if retry < max_retries - 1:
+                    # Exponential backoff: 1s, 2s, 4s
+                    wait_time = 2 ** retry
+                    time.sleep(wait_time)
+                else:
+                    return None
+        
+        return None
     
     def open_position(self, market_id: str, yes_price: float, strategy: str, question: str) -> Dict:
         """Open a position"""
@@ -220,17 +230,26 @@ class PolymarketTraderV4:
         return position
     
     def close_position(self, trade_id: str, exit_price: float) -> Optional[Dict]:
-        """Close a position and update capital"""
+        """Close a position and update capital (accounting for ~2% Polymarket fees)"""
         for trade in self.trades:
             if trade.get("id") == trade_id and trade.get("status") == "OPEN":
                 entry = trade["entry_price"]
                 size = trade["position_size"]
-                profit = (exit_price - entry) * (size / entry)
+                
+                # Calculate profit BEFORE fees
+                profit_before_fees = (exit_price - entry) * (size / entry)
+                
+                # Subtract ~2% taker fee (entry + exit = ~4% total)
+                polymarket_fee = size * 0.02
+                profit = profit_before_fees - polymarket_fee
+                
                 strategy = trade.get("strategy", "Unknown")
                 
                 trade["exit_price"] = exit_price
                 trade["exit_time"] = datetime.now().isoformat()
                 trade["pnl"] = profit
+                trade["pnl_before_fees"] = profit_before_fees
+                trade["polymarket_fee"] = polymarket_fee
                 trade["status"] = "CLOSED"
                 
                 self.save_trades()
@@ -345,6 +364,23 @@ Status: 🔴 LOCKED for 24 hours
         except:
             return True
     
+    def check_market_regime(self) -> bool:
+        """Check if market is tradeable (ADX > 20, not too choppy)"""
+        if not self.indicators:
+            return True
+        
+        try:
+            candles = self.indicators.get_ohlcv("BTC", timeframe="6h", limit=50)
+            if not candles:
+                return True
+            
+            adx = self.indicators.calculate_adx(candles)
+            
+            # Skip trading if ADX < 20 (too choppy/ranging)
+            return adx > 20
+        except:
+            return True
+    
     def find_signals(self, markets: List[Dict]) -> Dict:
         """Find trading signals from all strategies"""
         signals = {
@@ -449,6 +485,11 @@ Status: 🔴 LOCKED for 24 hours
         print("\n" + "=" * 80)
         print("🤖 POLYMARKET TRADER v4 - MULTI-STRATEGY")
         print("=" * 80)
+        
+        # Check market regime first
+        if not self.check_market_regime():
+            print("\n⏰ Market too choppy (ADX < 20). Skipping trading cycle.")
+            return
         
         try:
             with open(MARKETS_FILE, "r") as f:

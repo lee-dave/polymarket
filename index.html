@@ -45,6 +45,35 @@
             font-size: 0.9em;
         }
 
+        .timeframe-toggle {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .toggle-btn {
+            padding: 8px 20px;
+            border: 2px solid #334155;
+            background: rgba(30, 41, 59, 0.8);
+            color: #93c5fd;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s ease;
+        }
+
+        .toggle-btn.active {
+            background: #3b82f6;
+            border-color: #60a5fa;
+            color: white;
+            font-weight: bold;
+        }
+
+        .toggle-btn:hover {
+            border-color: #60a5fa;
+        }
+
         .grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -283,6 +312,10 @@
         <header>
             <h1>📊 Polymarket Trading Dashboard</h1>
             <p class="timestamp">AI-Powered Prediction Market Trading | Last updated: <span id="timestamp">--:--:--</span></p>
+            <div class="timeframe-toggle">
+                <button class="toggle-btn active" onclick="switchTimeframe('4h')">4H Markets</button>
+                <button class="toggle-btn" onclick="switchTimeframe('1h')">1H Markets</button>
+            </div>
         </header>
 
         <!-- Overall Stats -->
@@ -396,6 +429,132 @@
             </table>
         </div>
 
+        <!-- Strategy 3: TBO Trend -->
+        <div class="strategy-section">
+            <div class="strategy-header">
+                <span class="strategy-icon">📈</span>
+                <h2>TBO Trend Strategy</h2>
+                <span class="badge contrarian">Momentum</span>
+            </div>
+
+            <div class="grid">
+                <div class="card">
+                    <h3>Strategy P/L</h3>
+                    <div class="metric" id="tbotrend-pnl">$0.00</div>
+                    <div class="subtext" id="tbotrend-stats">0 trades</div>
+                </div>
+
+                <div class="card">
+                    <h3>Win Rate</h3>
+                    <div class="metric" id="tbotrend-wr">0%</div>
+                    <div class="subtext">ADX > 25 (strong trend)</div>
+                </div>
+
+                <div class="card">
+                    <h3>ROI</h3>
+                    <div class="metric" id="tbotrend-roi">0%</div>
+                    <div class="subtext">Return on invested capital</div>
+                </div>
+            </div>
+
+            <table class="trades-table" id="tbotrend-trades">
+                <thead>
+                    <tr>
+                        <th>Market</th>
+                        <th>Entry</th>
+                        <th>Exit</th>
+                        <th>P/L</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <!-- Strategy 4: TBT Divergence -->
+        <div class="strategy-section">
+            <div class="strategy-header">
+                <span class="strategy-icon">🔄</span>
+                <h2>TBT Divergence Strategy</h2>
+                <span class="badge late-entry">Technical</span>
+            </div>
+
+            <div class="grid">
+                <div class="card">
+                    <h3>Strategy P/L</h3>
+                    <div class="metric" id="tbtdiv-pnl">$0.00</div>
+                    <div class="subtext" id="tbtdiv-stats">0 trades</div>
+                </div>
+
+                <div class="card">
+                    <h3>Win Rate</h3>
+                    <div class="metric" id="tbtdiv-wr">0%</div>
+                    <div class="subtext">RSI/MACD divergence</div>
+                </div>
+
+                <div class="card">
+                    <h3>ROI</h3>
+                    <div class="metric" id="tbtdiv-roi">0%</div>
+                    <div class="subtext">Return on invested capital</div>
+                </div>
+            </div>
+
+            <table class="trades-table" id="tbtdiv-trades">
+                <thead>
+                    <tr>
+                        <th>Market</th>
+                        <th>Entry</th>
+                        <th>Exit</th>
+                        <th>P/L</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <!-- Strategy 5: Execution Confidence -->
+        <div class="strategy-section">
+            <div class="strategy-header">
+                <span class="strategy-icon">⚡</span>
+                <h2>Execution Confidence Strategy</h2>
+                <span class="badge contrarian">Multi-Signal</span>
+            </div>
+
+            <div class="grid">
+                <div class="card">
+                    <h3>Strategy P/L</h3>
+                    <div class="metric" id="execconf-pnl">$0.00</div>
+                    <div class="subtext" id="execconf-stats">0 trades</div>
+                </div>
+
+                <div class="card">
+                    <h3>Win Rate</h3>
+                    <div class="metric" id="execconf-wr">0%</div>
+                    <div class="subtext">2+ signal consensus</div>
+                </div>
+
+                <div class="card">
+                    <h3>ROI</h3>
+                    <div class="metric" id="execconf-roi">0%</div>
+                    <div class="subtext">Return on invested capital</div>
+                </div>
+            </div>
+
+            <table class="trades-table" id="execconf-trades">
+                <thead>
+                    <tr>
+                        <th>Market</th>
+                        <th>Entry</th>
+                        <th>Exit</th>
+                        <th>P/L</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
         <!-- Summary Table -->
         <div class="summary-section">
             <h2>📊 The Numbers</h2>
@@ -424,6 +583,21 @@
     </div>
 
     <script>
+        let currentTimeframe = "4h";
+
+        function switchTimeframe(timeframe) {
+            currentTimeframe = timeframe;
+            
+            // Update button states
+            document.querySelectorAll('.toggle-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Reload data
+            loadTradeData();
+        }
+
         async function loadTradeData() {
             try {
                 const response = await fetch('trades.json');
@@ -432,13 +606,16 @@
                 // Handle both array and object formats
                 const tradesList = Array.isArray(trades) ? trades : (trades.trades || []);
                 
-                updateDashboard(tradesList);
+                // Filter by current timeframe
+                const filteredTrades = tradesList.filter(t => t.timeframe === currentTimeframe);
+                
+                updateDashboard(filteredTrades, currentTimeframe);
             } catch (error) {
                 console.error('Error loading trades:', error);
             }
         }
 
-        function updateDashboard(trades) {
+        function updateDashboard(trades, timeframe = "4h") {
             // Filter trades by strategy
             const contrarian = trades.filter(t => t.strategy === 'AI Contrarian');
             const lateEntry = trades.filter(t => t.strategy === 'Late Entry');
@@ -464,16 +641,29 @@
             const avgTradeValue = trades.length > 0 ? (totalPnL / closedTrades.length).toFixed(2) : 0;
             document.getElementById('avgTradeValue').textContent = `$${avgTradeValue} per trade`;
             
-            // Update Contrarian stats
+            // Filter by all strategies
+            const contrarian = trades.filter(t => t.strategy === 'AI Contrarian');
+            const lateEntry = trades.filter(t => t.strategy === 'Late Entry');
+            const tboTrend = trades.filter(t => t.strategy === 'TBO Trend');
+            const tbtDiv = trades.filter(t => t.strategy === 'TBT Divergence');
+            const execConf = trades.filter(t => t.strategy === 'Execution Confidence');
+            
+            // Update all strategy stats
             updateStrategyStats('contrarian', contrarian);
             updateStrategyStats('lateentry', lateEntry);
+            updateStrategyStats('tbotrend', tboTrend);
+            updateStrategyStats('tbtdiv', tbtDiv);
+            updateStrategyStats('execconf', execConf);
             
             // Update summary table
-            updateSummaryTable(contrarian, lateEntry, arbitrage);
+            updateSummaryTable(contrarian, lateEntry, tboTrend, tbtDiv, execConf);
             
-            // Update tables
+            // Update all tables
             populateTradesTable('contrarian-trades', contrarian);
             populateTradesTable('lateentry-trades', lateEntry);
+            populateTradesTable('tbotrend-trades', tboTrend);
+            populateTradesTable('tbtdiv-trades', tbtDiv);
+            populateTradesTable('execconf-trades', execConf);
             
             // Update timestamp
             document.getElementById('timestamp').textContent = new Date().toLocaleTimeString();
@@ -500,14 +690,16 @@
             document.getElementById(`${strategyId}-roi`).textContent = `${roi}%`;
         }
 
-        function updateSummaryTable(contrarian, lateEntry, arbitrage) {
+        function updateSummaryTable(contrarian, lateEntry, tboTrend, tbtDiv, execConf) {
             const tbody = document.getElementById('summary-body');
             tbody.innerHTML = '';
 
             const strategies = [
-                { name: 'AI Contrarian', trades: contrarian, capital: 10 },
-                { name: 'Late Entry', trades: lateEntry, capital: 10 },
-                { name: 'Arbitrage', trades: arbitrage, capital: 10 }
+                { name: 'AI Contrarian', trades: contrarian, capital: 100 },
+                { name: 'Late Entry', trades: lateEntry, capital: 100 },
+                { name: 'TBO Trend', trades: tboTrend, capital: 100 },
+                { name: 'TBT Divergence', trades: tbtDiv, capital: 100 },
+                { name: 'Execution Confidence', trades: execConf, capital: 100 }
             ];
 
             strategies.forEach(strat => {
@@ -536,12 +728,12 @@
             });
 
             // Add total row
-            const allTrades = [...contrarian, ...lateEntry, ...arbitrage];
+            const allTrades = [...contrarian, ...lateEntry, ...tboTrend, ...tbtDiv, ...execConf];
             const allClosed = allTrades.filter(t => t.status === 'CLOSED');
             const totalPnL = allClosed.reduce((sum, t) => sum + (t.pnl || 0), 0);
             const totalWins = allClosed.filter(t => (t.pnl || 0) > 0).length;
             const totalWR = allClosed.length > 0 ? (totalWins / allClosed.length * 100).toFixed(1) : 0;
-            const totalCurrent = 30 + totalPnL;
+            const totalCurrent = 500 + totalPnL;
 
             const totalRow = document.createElement('tr');
             totalRow.style.borderTop = '2px solid #334155';
@@ -550,8 +742,8 @@
             const totalWRClass = totalWR > 50 ? 'value-positive' : (totalWR < 50 ? 'value-negative' : 'value-neutral');
 
             totalRow.innerHTML = `
-                <td><span class="strategy-name">TOTAL</span></td>
-                <td>$30</td>
+                <td><span class="strategy-name">TOTAL (${currentTimeframe.toUpperCase()})</span></td>
+                <td>$500</td>
                 <td class="value-neutral">$${totalCurrent.toFixed(2)}</td>
                 <td class="${totalPnLClass}">${totalPnL > 0 ? '+' : ''}$${totalPnL.toFixed(2)}</td>
                 <td class="value-neutral">${allClosed.length + allTrades.filter(t => t.status === 'OPEN').length}</td>

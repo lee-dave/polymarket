@@ -583,10 +583,11 @@
     </div>
 
     <script>
-        let currentTimeframe = "4h";
+        // Define globally
+        window.currentTimeframe = "4h";
 
-        function switchTimeframe(timeframe) {
-            currentTimeframe = timeframe;
+        window.switchTimeframe = function(timeframe) {
+            window.currentTimeframe = timeframe;
             console.log('Switching to:', timeframe);
             
             // Update all buttons
@@ -610,10 +611,10 @@
             }
             
             // Reload data
-            loadTradeData();
+            window.loadTradeData();
         }
 
-        async function loadTradeData() {
+        window.loadTradeData = async function() {
             try {
                 const response = await fetch('trades.json');
                 const trades = await response.json();
@@ -622,15 +623,15 @@
                 const tradesList = Array.isArray(trades) ? trades : (trades.trades || []);
                 
                 // Filter by current timeframe
-                const filteredTrades = tradesList.filter(t => t.timeframe === currentTimeframe);
+                const filteredTrades = tradesList.filter(t => t.timeframe === window.currentTimeframe);
                 
-                updateDashboard(filteredTrades, currentTimeframe);
+                updateDashboard(filteredTrades, window.currentTimeframe);
             } catch (error) {
                 console.error('Error loading trades:', error);
             }
         }
 
-        function updateDashboard(trades, timeframe = "4h") {
+        window.updateDashboard = function(trades, timeframe = "4h") {
             // Filter trades by strategy
             const contrarian = trades.filter(t => t.strategy === 'AI Contrarian');
             const lateEntry = trades.filter(t => t.strategy === 'Late Entry');
@@ -757,7 +758,7 @@
             const totalWRClass = totalWR > 50 ? 'value-positive' : (totalWR < 50 ? 'value-negative' : 'value-neutral');
 
             totalRow.innerHTML = `
-                <td><span class="strategy-name">TOTAL (${currentTimeframe.toUpperCase()})</span></td>
+                <td><span class="strategy-name">TOTAL (${window.currentTimeframe.toUpperCase()})</span></td>
                 <td>$500</td>
                 <td class="value-neutral">$${totalCurrent.toFixed(2)}</td>
                 <td class="${totalPnLClass}">${totalPnL > 0 ? '+' : ''}$${totalPnL.toFixed(2)}</td>
@@ -793,10 +794,10 @@
         }
 
         // Initial load
-        loadTradeData();
+        window.loadTradeData();
 
         // Auto-refresh every 30 seconds
-        setInterval(loadTradeData, 30000);
+        setInterval(window.loadTradeData, 30000);
     </script>
 </body>
 </html>

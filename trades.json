@@ -1,0 +1,54 @@
+[
+  {
+    "market_id": "test_btc_123",
+    "strategy": "AI Contrarian",
+    "entry_time": "2026-02-18T10:00:15.998913",
+    "exit_time": "2026-02-18T17:59:15.998921",
+    "entry_price": 0.35,
+    "exit_price": 0.75,
+    "size": 10,
+    "pnl": 40.0,
+    "pnl_pct": 114.29,
+    "status": "closed"
+  },
+  {
+    "id": "856812b6",
+    "market_id": "98033",
+    "question": "Will ETH be above $2000 on April 1st, 2021?",
+    "action": "BUY",
+    "entry_price": 9.08007709769385e-08,
+    "entry_time": "2026-02-19T11:21:27.445205",
+    "position_size": 10.0,
+    "exit_price": null,
+    "exit_time": null,
+    "pnl": null,
+    "status": "OPEN"
+  },
+  {
+    "id": "b54f0821",
+    "market_id": "118045",
+    "question": "Will the average Ethereum gas price be below 170 Gwei on April 19?",
+    "action": "BUY",
+    "entry_price": 1.213036580215343e-07,
+    "entry_time": "2026-02-19T11:21:27.445612",
+    "position_size": 10.0,
+    "exit_price": null,
+    "exit_time": null,
+    "pnl": null,
+    "status": "OPEN"
+  },
+  {
+    "id": "8ae30e8a",
+    "market_id": "166964",
+    "question": "Will $SOL (Solana) be above $50 on May 24, 2021?",
+    "strategy": "AI Contrarian",
+    "action": "BUY",
+    "entry_price": 1.337742453332306e-07,
+    "entry_time": "2026-02-19T11:35:42.022009",
+    "position_size": 10.0,
+    "exit_price": null,
+    "exit_time": null,
+    "pnl": null,
+    "status": "OPEN"
+  }
+]

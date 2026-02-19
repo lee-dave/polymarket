@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Polymarket Paper Trading Engine v2 - Advanced Multi-Strategy with Timing, Scaling, Arbitrage
+Polymarket Paper Trading Engine v2 - Advanced Multi-Strategy with Smart AI Contrarian v3
 """
 
 import requests
@@ -9,6 +9,15 @@ from datetime import datetime
 from typing import List, Dict, Optional
 import uuid
 from math import sqrt
+import subprocess
+import sys
+
+# Import smart contrarian
+sys.path.insert(0, '/Users/claudbot')
+try:
+    from polymarket_contrarian_v3 import SmartContrarian
+except ImportError:
+    SmartContrarian = None
 
 POLYMARKET_API = "https://gamma-api.polymarket.com"
 TRADES_FILE = "/Users/claudbot/trades.json"
@@ -58,6 +67,9 @@ class PolymarketTraderV2:
         self.circuit_breaker_state = self.load_circuit_breaker()
         self.market_history = self.load_market_history()
         self.win_rate = self.calculate_win_rate()
+        
+        # Smart AI Contrarian v3
+        self.contrarian = SmartContrarian() if SmartContrarian else None
         self.correlation_data = {}
     
     def calculate_win_rate(self) -> float:
@@ -274,16 +286,29 @@ class PolymarketTraderV2:
             
             self.update_market_history(market_id, yes_price)
             
-            # Strategy 1: AI Contrarian (YES < 0.30)
-            if yes_price < self.contrarian_buy_threshold:
-                contrarian_ops.append({
-                    "market_id": market_id,
-                    "question": question,
-                    "yes_price": yes_price,
-                    "strategy": "AI Contrarian",
-                    "signal_strength": 1 - yes_price,
-                    "timeframe": timeframe
-                })
+            # Strategy 1: AI Contrarian v3 - Smart panic detection
+            if self.contrarian and market_id in self.market_history:
+                price_hist = [
+                    {"price": p, "timestamp": ts}
+                    for p, ts in zip(
+                        self.market_history[market_id]["prices"],
+                        self.market_history[market_id]["timestamps"]
+                    )
+                ]
+                
+                panic_signal = self.contrarian.detect_crowd_panic(market_id, yes_price, 100, price_hist)
+                
+                if panic_signal:
+                    contrarian_ops.append({
+                        "market_id": market_id,
+                        "question": question,
+                        "yes_price": yes_price,
+                        "strategy": "AI Contrarian",
+                        "signal_strength": panic_signal["confidence"],
+                        "timeframe": timeframe,
+                        "panic_reason": panic_signal["reasoning"],
+                        "volume_spike": panic_signal.get("volume_spike_ratio", 0)
+                    })
             
             # Strategy 2: Late Entry (YES < 0.35 + reversal)
             if yes_price < self.late_entry_buy_threshold:
@@ -429,6 +454,8 @@ class PolymarketTraderV2:
             if not has_position:
                 pos = self.open_position(opp["market_id"], opp["yes_price"], opp["question"], opp["strategy"])
                 print(f"\n✅ Contrarian: ${pos['position_size']:.2f} @ ${opp['yes_price']:.2f}")
+                print(f"   Panic detected: {opp.get('panic_reason', 'N/A')}")
+                print(f"   Confidence: {opp.get('signal_strength', 0):.1%}")
         
         # Execute late entry (max 2)
         for opp in late_entry_ops[:2]:

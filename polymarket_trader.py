@@ -465,3 +465,15 @@ class PolymarketTraderV2:
 if __name__ == "__main__":
     trader = PolymarketTraderV2()
     trader.run_trading_cycle()
+    
+    # Auto-commit trades to git
+    import subprocess
+    try:
+        subprocess.run(["git", "-C", "/Users/claudbot", "add", "trades.json"], check=True)
+        subprocess.run([
+            "git", "-C", "/Users/claudbot", "commit", 
+            "-m", f"[{datetime.now().strftime('%H:%M')}] Polymarket trades updated"
+        ], check=False)  # Don't fail if nothing changed
+        subprocess.run(["git", "-C", "/Users/claudbot", "push", "origin", "main"], check=True)
+    except Exception as e:
+        print(f"⚠️ Git sync failed: {e}")

@@ -1,37 +1,82 @@
 {
   "AI Contrarian": {
-    "initial": 100.0,
-    "current": 100.0,
-    "cumulative_pnl": 0.0,
-    "consecutive_wins": 0,
-    "consecutive_losses": 0
+    "4h": {
+      "initial": 100.0,
+      "current": 100.0,
+      "cumulative_pnl": 0.0,
+      "consecutive_wins": 0,
+      "consecutive_losses": 0
+    },
+    "1h": {
+      "initial": 100.0,
+      "current": 100.0,
+      "cumulative_pnl": 0.0,
+      "consecutive_wins": 0,
+      "consecutive_losses": 0
+    }
   },
   "Late Entry": {
-    "initial": 100.0,
-    "current": 100.0,
-    "cumulative_pnl": 0.0,
-    "consecutive_wins": 0,
-    "consecutive_losses": 0
+    "4h": {
+      "initial": 100.0,
+      "current": 100.0,
+      "cumulative_pnl": 0.0,
+      "consecutive_wins": 0,
+      "consecutive_losses": 0
+    },
+    "1h": {
+      "initial": 100.0,
+      "current": 100.0,
+      "cumulative_pnl": 0.0,
+      "consecutive_wins": 0,
+      "consecutive_losses": 0
+    }
   },
   "TBO Trend": {
-    "initial": 100.0,
-    "current": 100.0,
-    "cumulative_pnl": 0.0,
-    "consecutive_wins": 0,
-    "consecutive_losses": 0
+    "4h": {
+      "initial": 100.0,
+      "current": 100.0,
+      "cumulative_pnl": 0.0,
+      "consecutive_wins": 0,
+      "consecutive_losses": 0
+    },
+    "1h": {
+      "initial": 100.0,
+      "current": 100.0,
+      "cumulative_pnl": 0.0,
+      "consecutive_wins": 0,
+      "consecutive_losses": 0
+    }
   },
   "TBT Divergence": {
-    "initial": 100.0,
-    "current": 100.0,
-    "cumulative_pnl": 0.0,
-    "consecutive_wins": 0,
-    "consecutive_losses": 0
+    "4h": {
+      "initial": 100.0,
+      "current": 100.0,
+      "cumulative_pnl": 0.0,
+      "consecutive_wins": 0,
+      "consecutive_losses": 0
+    },
+    "1h": {
+      "initial": 100.0,
+      "current": 100.0,
+      "cumulative_pnl": 0.0,
+      "consecutive_wins": 0,
+      "consecutive_losses": 0
+    }
   },
   "Execution Confidence": {
-    "initial": 100.0,
-    "current": 100.0,
-    "cumulative_pnl": 0.0,
-    "consecutive_wins": 0,
-    "consecutive_losses": 0
+    "4h": {
+      "initial": 100.0,
+      "current": 100.0,
+      "cumulative_pnl": 0.0,
+      "consecutive_wins": 0,
+      "consecutive_losses": 0
+    },
+    "1h": {
+      "initial": 100.0,
+      "current": 100.0,
+      "cumulative_pnl": 0.0,
+      "consecutive_wins": 0,
+      "consecutive_losses": 0
+    }
   }
 }

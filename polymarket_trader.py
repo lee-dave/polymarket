@@ -80,18 +80,21 @@ class PolymarketTraderV4:
             json.dump(self.trades, f, indent=2, default=str)
     
     def load_capital_state(self) -> Dict:
-        """Load capital state for each strategy"""
+        """Load capital state for each strategy + timeframe"""
         try:
             with open(CAPITAL_FILE, "r") as f:
                 return json.load(f)
         except FileNotFoundError:
             return {
                 strategy: {
-                    "initial": self.initial_capital[strategy],
-                    "current": self.initial_capital[strategy],
-                    "cumulative_pnl": 0.0,
-                    "consecutive_wins": 0,
-                    "consecutive_losses": 0
+                    timeframe: {
+                        "initial": self.initial_capital[strategy],
+                        "current": self.initial_capital[strategy],
+                        "cumulative_pnl": 0.0,
+                        "consecutive_wins": 0,
+                        "consecutive_losses": 0
+                    }
+                    for timeframe in ["4h", "1h"]
                 }
                 for strategy in self.initial_capital
             }
@@ -101,20 +104,21 @@ class PolymarketTraderV4:
         with open(CAPITAL_FILE, "w") as f:
             json.dump(self.capital_state, f, indent=2, default=str)
     
-    def get_position_size(self, strategy: str) -> float:
-        """Calculate position size based on capital and scaling rules"""
-        state = self.capital_state.get(strategy, {})
-        current_capital = state.get("current", self.initial_capital.get(strategy, 100))
+    def get_position_size(self, strategy: str, timeframe: str = "4h") -> float:
+        """Calculate position size based on capital and scaling rules (per timeframe)"""
+        strategy_state = self.capital_state.get(strategy, {})
+        timeframe_state = strategy_state.get(timeframe, {})
+        current_capital = timeframe_state.get("current", self.initial_capital.get(strategy, 100))
         
         # Base: 5% of strategy capital
         base_size = current_capital * self.risk_per_trade
         
         # Scale up if winning
-        if state.get("consecutive_wins", 0) >= self.profit_threshold_scale_up:
+        if timeframe_state.get("consecutive_wins", 0) >= self.profit_threshold_scale_up:
             base_size *= 1.5  # 1.5x position on winning streak
         
         # Scale down if losing
-        if state.get("consecutive_losses", 0) >= self.loss_threshold_scale_down:
+        if timeframe_state.get("consecutive_losses", 0) >= self.loss_threshold_scale_down:
             base_size *= 0.5  # 0.5x position after losses
         
         return max(self.min_position, min(self.max_position, base_size))
@@ -255,8 +259,15 @@ class PolymarketTraderV4:
                 
                 self.save_trades()
                 
-                # Update capital
-                state = self.capital_state.get(strategy, {})
+                # Update capital (per timeframe)
+                timeframe = trade.get("timeframe", "4h")
+                
+                if strategy not in self.capital_state:
+                    self.capital_state[strategy] = {}
+                if timeframe not in self.capital_state[strategy]:
+                    self.capital_state[strategy][timeframe] = {"current": 100, "cumulative_pnl": 0, "consecutive_wins": 0, "consecutive_losses": 0}
+                
+                state = self.capital_state[strategy][timeframe]
                 state["current"] = state.get("current", 100) + profit
                 state["cumulative_pnl"] = state.get("cumulative_pnl", 0) + profit
                 
@@ -269,7 +280,7 @@ class PolymarketTraderV4:
                     state["consecutive_losses"] = 0
                     self.record_win(strategy)
                 
-                self.capital_state[strategy] = state
+                self.capital_state[strategy][timeframe] = state
                 self.save_capital_state()
                 
                 return trade
@@ -518,7 +529,7 @@ Status: 🔴 LOCKED for 24 hours
             if not signal_list:
                 continue
             
-            pos_size = self.get_position_size(strategy)
+            pos_size = self.get_position_size(strategy, timeframe=timeframe)
             
             # Strategy-specific execution logic
             max_positions = {"AI Contrarian": 1, "Late Entry": 2, "TBO Trend": 1, "TBT Divergence": 1, "Execution Confidence": 1}

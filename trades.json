@@ -118,5 +118,18 @@
     "exit_time": null,
     "pnl": null,
     "status": "OPEN"
+  },
+  {
+    "id": "bce3125d",
+    "market_id": "79704",
+    "question": "Arb: 11988 vs 79704",
+    "strategy": "Arbitrage",
+    "entry_price": 2.7502808251266836e-07,
+    "entry_time": "2026-02-19T15:01:43.128725",
+    "position_size": 10.0,
+    "exit_price": null,
+    "exit_time": null,
+    "pnl": null,
+    "status": "OPEN"
   }
 ]

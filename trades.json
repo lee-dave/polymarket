@@ -60,5 +60,17 @@
     "circuit_breaker": "CLEAR",
     "action_taken": "NONE - waiting for API configuration",
     "trades_executed": 0
+  },
+  {
+    "id": "run_2026-02-19T12:53:44.338650",
+    "timestamp": "2026-02-19T12:53:15.000000",
+    "strategy": "AI Contrarian",
+    "status": "FAILED",
+    "reason": "Polymarket API not configured - credentials required",
+    "circuit_breaker": "CLEAR",
+    "consecutive_losses": 0,
+    "open_positions": 3,
+    "action_taken": "SKIP",
+    "trades_executed": 0
   }
 ]

@@ -18,6 +18,11 @@ try:
 except ImportError:
     SmartContrarian = None
 
+try:
+    from polymarket_technical_indicators import TechnicalIndicators
+except ImportError:
+    TechnicalIndicators = None
+
 POLYMARKET_API = "https://gamma-api.polymarket.com"
 TRADES_FILE = "/Users/claudbot/trades.json"
 CIRCUIT_BREAKER_FILE = "/Users/claudbot/circuit_breaker_state.json"
@@ -58,6 +63,7 @@ class PolymarketTraderV4:
         self.circuit_breaker_state = self.load_circuit_breaker()
         self.market_history = self.load_market_history()
         self.contrarian = SmartContrarian() if SmartContrarian else None
+        self.indicators = TechnicalIndicators() if TechnicalIndicators else None
     
     def load_trades(self) -> List[Dict]:
         """Load trades"""
@@ -190,53 +196,6 @@ class PolymarketTraderV4:
             return float(outcome_prices[0]) if outcome_prices else None
         except:
             return None
-    
-    def calculate_adx(self, prices: List[float]) -> float:
-        """Simplified ADX calculation (trend strength)"""
-        if len(prices) < 14:
-            return 25  # Neutral
-        
-        # Simplified: just check volatility
-        recent = prices[-14:]
-        high = max(recent)
-        low = min(recent)
-        volatility = (high - low) / low if low > 0 else 0
-        
-        return min(100, volatility * 100)  # Return 0-100
-    
-    def detect_rsi_divergence(self, prices: List[float]) -> bool:
-        """Detect RSI divergence (price makes new low but RSI higher)"""
-        if len(prices) < 14:
-            return False
-        
-        recent = prices[-14:]
-        
-        # Calculate RSI
-        deltas = [recent[i] - recent[i-1] for i in range(1, len(recent))]
-        gains = [d for d in deltas if d > 0]
-        losses = [-d for d in deltas if d < 0]
-        
-        avg_gain = sum(gains) / len(recent)
-        avg_loss = sum(losses) / len(recent)
-        
-        rs = avg_gain / avg_loss if avg_loss > 0 else 0
-        rsi = 100 - (100 / (1 + rs))
-        
-        # Divergence: RSI < 30 (oversold) but price making higher low = reversal
-        return rsi < self.rsi_divergence_threshold and prices[-1] > prices[-7]
-    
-    def detect_macd_divergence(self, prices: List[float]) -> bool:
-        """Detect MACD divergence"""
-        if len(prices) < 26:
-            return False
-        
-        # Simplified MACD
-        ema12 = sum(prices[-12:]) / 12
-        ema26 = sum(prices[-26:]) / 26
-        macd = ema12 - ema26
-        
-        # Check for bullish divergence
-        return macd > 0 and prices[-1] < prices[-10]
     
     def open_position(self, market_id: str, yes_price: float, strategy: str, question: str) -> Dict:
         """Open a position"""
@@ -396,26 +355,46 @@ Status: 🔴 LOCKED for 24 hours
                         "confidence": 0.75
                     })
             
-            # TBO Trend (ADX + momentum)
-            if len(price_hist) >= 14:
-                adx = self.calculate_adx(price_hist)
-                if adx > self.adx_trend_threshold and yes_price > 0.45:
+            # TBO Trend - Real CCXT Coinbase OHLCV indicators
+            if self.indicators and "BTC" in question.upper():
+                tbo_sig = self.indicators.get_tbo_signal("BTC")
+                if tbo_sig:
                     signals["TBO Trend"].append({
                         "market_id": market_id,
                         "yes_price": yes_price,
-                        "confidence": min(adx / 100, 0.9),
-                        "adx": adx
+                        "confidence": tbo_sig["confidence"],
+                        "adx": tbo_sig["adx"]
+                    })
+            elif self.indicators and "ETH" in question.upper():
+                tbo_sig = self.indicators.get_tbo_signal("ETH")
+                if tbo_sig:
+                    signals["TBO Trend"].append({
+                        "market_id": market_id,
+                        "yes_price": yes_price,
+                        "confidence": tbo_sig["confidence"],
+                        "adx": tbo_sig["adx"]
                     })
             
-            # TBT Divergence (RSI + MACD)
-            if len(price_hist) >= 26:
-                rsi_div = self.detect_rsi_divergence(price_hist)
-                macd_div = self.detect_macd_divergence(price_hist)
-                if rsi_div or macd_div:
+            # TBT Divergence - Real CCXT Coinbase OHLCV indicators
+            if self.indicators and "BTC" in question.upper():
+                tbt_sig = self.indicators.get_tbt_signal("BTC")
+                if tbt_sig:
                     signals["TBT Divergence"].append({
                         "market_id": market_id,
                         "yes_price": yes_price,
-                        "confidence": 0.7 if rsi_div else 0.6
+                        "confidence": tbt_sig["confidence"],
+                        "rsi_div": tbt_sig["rsi_divergence"],
+                        "macd_div": tbt_sig["macd_divergence"]
+                    })
+            elif self.indicators and "ETH" in question.upper():
+                tbt_sig = self.indicators.get_tbt_signal("ETH")
+                if tbt_sig:
+                    signals["TBT Divergence"].append({
+                        "market_id": market_id,
+                        "yes_price": yes_price,
+                        "confidence": tbt_sig["confidence"],
+                        "rsi_div": tbt_sig["rsi_divergence"],
+                        "macd_div": tbt_sig["macd_divergence"]
                     })
         
         return signals

@@ -657,9 +657,7 @@
             const avgTradeValue = trades.length > 0 ? (totalPnL / closedTrades.length).toFixed(2) : 0;
             document.getElementById('avgTradeValue').textContent = `$${avgTradeValue} per trade`;
             
-            // Filter by all strategies
-            const contrarian = trades.filter(t => t.strategy === 'AI Contrarian');
-            const lateEntry = trades.filter(t => t.strategy === 'Late Entry');
+            // Filter by all strategies (already filtered above, just reuse)
             const tboTrend = trades.filter(t => t.strategy === 'TBO Trend');
             const tbtDiv = trades.filter(t => t.strategy === 'TBT Divergence');
             const execConf = trades.filter(t => t.strategy === 'Execution Confidence');
@@ -797,8 +795,21 @@
         const btn4h = document.getElementById('btn-4h');
         const btn1h = document.getElementById('btn-1h');
         
-        if (btn4h) btn4h.addEventListener('click', function() { window.switchTimeframe('4h'); });
-        if (btn1h) btn1h.addEventListener('click', function() { window.switchTimeframe('1h'); });
+        console.log('Buttons found:', btn4h, btn1h);
+        
+        if (btn4h) {
+            btn4h.addEventListener('click', function() { 
+                console.log('4h clicked');
+                window.switchTimeframe('4h'); 
+            });
+        }
+        
+        if (btn1h) {
+            btn1h.addEventListener('click', function() { 
+                console.log('1h clicked');
+                window.switchTimeframe('1h'); 
+            });
+        }
         
         // Initial load
         window.loadTradeData();

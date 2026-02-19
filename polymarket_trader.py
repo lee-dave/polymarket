@@ -207,7 +207,7 @@ class PolymarketTraderV4:
         
         return None
     
-    def open_position(self, market_id: str, yes_price: float, strategy: str, question: str) -> Dict:
+    def open_position(self, market_id: str, yes_price: float, strategy: str, question: str, timeframe: str = "4h") -> Dict:
         """Open a position"""
         position_size = self.get_position_size(strategy)
         
@@ -216,6 +216,7 @@ class PolymarketTraderV4:
             "market_id": market_id,
             "question": question,
             "strategy": strategy,
+            "timeframe": timeframe,
             "entry_price": yes_price,
             "entry_time": datetime.now().isoformat(),
             "position_size": position_size,
@@ -381,8 +382,8 @@ Status: 🔴 LOCKED for 24 hours
         except:
             return True
     
-    def find_signals(self, markets: List[Dict]) -> Dict:
-        """Find trading signals from all strategies"""
+    def find_signals(self, markets: List[Dict], timeframe: str = "4h") -> Dict:
+        """Find trading signals from all strategies for specified timeframe (4h or 1h)"""
         signals = {
             "AI Contrarian": [],
             "Late Entry": [],
@@ -399,7 +400,8 @@ Status: 🔴 LOCKED for 24 hours
             if not yes_price:
                 yes_price = self.get_market_price(market_id)
             
-            if not yes_price or "4h" not in question.lower():
+            # Filter for specified timeframe
+            if not yes_price or timeframe not in question.lower():
                 continue
             
             self.update_market_history(market_id, yes_price)
@@ -481,9 +483,9 @@ Status: 🔴 LOCKED for 24 hours
         return signals
     
     def run_trading_cycle(self):
-        """Execute trading cycle"""
+        """Execute trading cycle for both 4h and 1h markets"""
         print("\n" + "=" * 80)
-        print("🤖 POLYMARKET TRADER v4 - MULTI-STRATEGY")
+        print("🤖 POLYMARKET TRADER v4 - 4H vs 1H TEST")
         print("=" * 80)
         
         # Check market regime first
@@ -498,7 +500,15 @@ Status: 🔴 LOCKED for 24 hours
             print("❌ No market data")
             return
         
-        signals = self.find_signals(markets)
+        # Trade both timeframes
+        for timeframe in ["4h", "1h"]:
+            self._execute_trading_cycle(markets, timeframe)
+    
+    def _execute_trading_cycle(self, markets: List[Dict], timeframe: str):
+        """Execute trading for a specific timeframe (4h or 1h)"""
+        print(f"\n📊 {timeframe.upper()} MARKETS")
+        
+        signals = self.find_signals(markets, timeframe=timeframe)
         
         for strategy, signal_list in signals.items():
             # Skip if circuit breaker active
@@ -514,7 +524,7 @@ Status: 🔴 LOCKED for 24 hours
             max_positions = {"AI Contrarian": 1, "Late Entry": 2, "TBO Trend": 1, "TBT Divergence": 1, "Execution Confidence": 1}
             max_pos = max_positions.get(strategy, 1)
             
-            print(f"\n{strategy}: {len(signal_list)} signals")
+            print(f"  {strategy}: {len(signal_list)} signals")
             
             # Open positions (up to max)
             opened = 0
@@ -523,23 +533,23 @@ Status: 🔴 LOCKED for 24 hours
                 yes_price = signal.get("yes_price")
                 question = signal.get("question", "")
                 
-                # Check if already have position in this market
+                # Check if already have position in this market + timeframe
                 has_position = any(
-                    t.get("market_id") == market_id and t.get("status") == "OPEN" and t.get("strategy") == strategy
+                    t.get("market_id") == market_id and t.get("status") == "OPEN" and t.get("strategy") == strategy and t.get("timeframe") == timeframe
                     for t in self.trades
                 )
                 
                 if not has_position and opened < max_pos:
-                    pos = self.open_position(market_id, yes_price, strategy, question)
-                    print(f"  ✅ {strategy} @ ${yes_price:.2f} | Size: ${pos_size:.2f} | Confidence: {signal.get('confidence', 0):.0%}")
+                    pos = self.open_position(market_id, yes_price, strategy, question, timeframe=timeframe)
+                    print(f"    ✅ @ ${yes_price:.2f} | Size: ${pos_size:.2f}")
                     opened += 1
             
-            # Check for exits (YES > sell threshold)
+            # Check for exits (YES > sell threshold) - only for this timeframe
             sell_threshold = {"AI Contrarian": 0.70, "Late Entry": 0.65, "TBO Trend": 0.65, "TBT Divergence": 0.65, "Execution Confidence": 0.65}
             threshold = sell_threshold.get(strategy, 0.65)
             
             for trade in self.trades:
-                if trade.get("status") != "OPEN" or trade.get("strategy") != strategy:
+                if trade.get("status") != "OPEN" or trade.get("strategy") != strategy or trade.get("timeframe") != timeframe:
                     continue
                 
                 market_id = trade.get("market_id")
@@ -547,7 +557,7 @@ Status: 🔴 LOCKED for 24 hours
                 
                 if yes_price and yes_price > threshold:
                     self.close_position(trade.get("id"), yes_price)
-                    print(f"  ❌ {strategy} closed @ ${yes_price:.2f} | P/L: ${trade.get('pnl', 0):.2f}")
+                    print(f"    ❌ Closed @ ${yes_price:.2f} | P/L: ${trade.get('pnl', 0):.2f}")
 
 
 if __name__ == "__main__":

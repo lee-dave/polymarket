@@ -236,8 +236,41 @@ class PolymarketTraderV2:
             # 24 hour lockout
             broken_until = datetime.now() + timedelta(hours=24)
             state["broken_until"] = broken_until.isoformat()
+            
+            # Alert user
+            self.send_circuit_breaker_alert(strategy, state["consecutive_losses"])
         
         self.save_circuit_breaker()
+    
+    def send_circuit_breaker_alert(self, strategy: str, loss_count: int):
+        """Send Telegram alert when circuit breaker triggers"""
+        try:
+            # Get strategy stats
+            strat_trades = [t for t in self.trades if t.get("strategy") == strategy and t.get("status") == "CLOSED"]
+            recent_losses = [t for t in strat_trades[-loss_count:] if t.get("pnl", 0) < 0]
+            total_loss = sum(t.get("pnl", 0) for t in recent_losses)
+            
+            message = f"""
+⛔ CIRCUIT BREAKER TRIGGERED
+
+Strategy: {strategy}
+Consecutive Losses: {loss_count}
+Total Loss: ${total_loss:.2f}
+Status: 🔴 LOCKED for 24 hours
+
+Trading will resume automatically after 24 hours.
+            """.strip()
+            
+            # Send via message tool to Telegram
+            subprocess.run([
+                "openclaw", "message",
+                "--action", "send",
+                "--channel", "telegram",
+                "--to", "2119792198",
+                "--message", message
+            ], capture_output=True)
+        except Exception as e:
+            print(f"⚠️ Failed to send Telegram alert: {e}")
     
     def record_win(self, strategy: str):
         """Record a win for strategy - reset losses"""

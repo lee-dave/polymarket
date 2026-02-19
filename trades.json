@@ -50,5 +50,15 @@
     "exit_time": null,
     "pnl": null,
     "status": "OPEN"
+  },
+  {
+    "id": "run_2026-02-19T12:38:48.150249",
+    "timestamp": "2026-02-19T12:38:48.150254",
+    "strategy": "AI Contrarian",
+    "status": "FAILED",
+    "reason": "Polymarket API credentials/endpoint not configured",
+    "circuit_breaker": "CLEAR",
+    "action_taken": "NONE - waiting for API configuration",
+    "trades_executed": 0
   }
 ]

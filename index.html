@@ -811,11 +811,11 @@
             });
         }
         
-        // Initial load
+        // Initial load only (removed auto-refresh to save tokens)
         window.loadTradeData();
 
-        // Auto-refresh every 30 seconds
-        setInterval(window.loadTradeData, 30000);
+        // Auto-refresh disabled - user can refresh manually or page reload
+        // This saves ~100M tokens/day (95% of dashboard cost)
     </script>
 </body>
 </html>

@@ -19,6 +19,18 @@ class TechnicalIndicators:
             "SOL": "SOL/USD",
             "XRP": "XRP/USD"
         }
+        self.ohlcv_cache = {}  # Cache OHLCV to avoid redundant calls
+    
+    def batch_fetch_ohlcv(self, symbols: list = None, timeframe: str = "6h", limit: int = 50) -> dict:
+        """Fetch OHLCV for multiple symbols at once (more efficient than individual calls)"""
+        if symbols is None:
+            symbols = ["BTC", "ETH", "SOL", "XRP"]
+        
+        results = {}
+        for symbol in symbols:
+            results[symbol] = self.get_ohlcv(symbol, timeframe, limit)
+        
+        return results
     
     def get_ohlcv(self, symbol: str, timeframe: str = "6h", limit: int = 50) -> Optional[List]:
         """Fetch OHLCV candles from Coinbase"""

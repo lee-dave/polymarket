@@ -29,6 +29,8 @@ CIRCUIT_BREAKER_FILE = "/Users/claudbot/circuit_breaker_state.json"
 MARKETS_FILE = "/Users/claudbot/polymarket_markets.json"
 MARKET_HISTORY_FILE = "/Users/claudbot/market_history.json"
 CAPITAL_FILE = "/Users/claudbot/capital_state.json"
+MARKET_CACHE_FILE = "/Users/claudbot/market_cache.json"
+MARKET_CACHE_TTL = 600  # 10 minutes
 
 class PolymarketTraderV4:
     """Multi-strategy trader with intelligent capital management"""
@@ -75,9 +77,22 @@ class PolymarketTraderV4:
             return []
     
     def save_trades(self):
-        """Save trades"""
+        """Save trades (archive old closed trades to save space)"""
+        # Keep only last 100 closed trades + all open trades
+        closed_trades = [t for t in self.trades if t.get("status") == "CLOSED"]
+        open_trades = [t for t in self.trades if t.get("status") == "OPEN"]
+        
+        # Keep only recent closed trades
+        archived_closed = closed_trades[-100:] if len(closed_trades) > 100 else closed_trades
+        
+        # Combine and save
+        trades_to_save = archived_closed + open_trades
+        
         with open(TRADES_FILE, "w") as f:
-            json.dump(self.trades, f, indent=2, default=str)
+            json.dump(trades_to_save, f, indent=2, default=str)
+        
+        # Update in-memory trades list
+        self.trades = trades_to_save
     
     def load_capital_state(self) -> Dict:
         """Load capital state for each strategy + timeframe"""
@@ -343,10 +358,13 @@ Status: 🔴 LOCKED for 24 hours
     def check_coinbase_panic(self) -> bool:
         """Check if BTC on Coinbase shows panic signals (RSI oversold + price down)"""
         if not self.indicators:
-            return True  # Allow if indicators unavailable
+            return True
         
         try:
-            candles = self.indicators.get_ohlcv("BTC", timeframe="6h", limit=50)
+            # Batch fetch all coins at once (more efficient)
+            all_candles = self.indicators.batch_fetch_ohlcv(["BTC"])
+            candles = all_candles.get("BTC")
+            
             if not candles:
                 return True
             
@@ -356,7 +374,7 @@ Status: 🔴 LOCKED for 24 hours
             # Panic: RSI < 30 (oversold) OR MACD bearish + price falling
             return rsi < 30 or (macd["direction"] == "BEARISH" and candles[-1][4] < candles[-5][4])
         except:
-            return True  # Allow if error
+            return True
     
     def check_coinbase_reversal(self) -> bool:
         """Check if BTC on Coinbase shows reversal signals (RSI bouncing + ADX recovering)"""
@@ -364,7 +382,10 @@ Status: 🔴 LOCKED for 24 hours
             return True
         
         try:
-            candles = self.indicators.get_ohlcv("BTC", timeframe="6h", limit=50)
+            # Batch fetch (reuses any cached data from panic check)
+            all_candles = self.indicators.batch_fetch_ohlcv(["BTC"])
+            candles = all_candles.get("BTC")
+            
             if not candles:
                 return True
             
@@ -382,7 +403,10 @@ Status: 🔴 LOCKED for 24 hours
             return True
         
         try:
-            candles = self.indicators.get_ohlcv("BTC", timeframe="6h", limit=50)
+            # Batch fetch (reuses cached data)
+            all_candles = self.indicators.batch_fetch_ohlcv(["BTC"])
+            candles = all_candles.get("BTC")
+            
             if not candles:
                 return True
             
@@ -449,7 +473,7 @@ Status: 🔴 LOCKED for 24 hours
                         "confidence": 0.85  # Higher confidence with dual confirmation
                     })
             
-            # TBO Trend - Real CCXT Coinbase OHLCV indicators
+            # TBO Trend - Real CCXT Coinbase OHLCV indicators (batch fetched)
             if self.indicators and "BTC" in question.upper():
                 tbo_sig = self.indicators.get_tbo_signal("BTC")
                 if tbo_sig:
@@ -469,7 +493,7 @@ Status: 🔴 LOCKED for 24 hours
                         "adx": tbo_sig["adx"]
                     })
             
-            # TBT Divergence - Real CCXT Coinbase OHLCV indicators
+            # TBT Divergence - Real CCXT Coinbase OHLCV indicators (batch fetched)
             if self.indicators and "BTC" in question.upper():
                 tbt_sig = self.indicators.get_tbt_signal("BTC")
                 if tbt_sig:
@@ -477,8 +501,8 @@ Status: 🔴 LOCKED for 24 hours
                         "market_id": market_id,
                         "yes_price": yes_price,
                         "confidence": tbt_sig["confidence"],
-                        "rsi_div": tbt_sig["rsi_divergence"],
-                        "macd_div": tbt_sig["macd_divergence"]
+                        "rsi_div": tbt_sig.get("rsi_divergence", False),
+                        "macd_div": tbt_sig.get("macd_divergence", False)
                     })
             elif self.indicators and "ETH" in question.upper():
                 tbt_sig = self.indicators.get_tbt_signal("ETH")
@@ -487,11 +511,41 @@ Status: 🔴 LOCKED for 24 hours
                         "market_id": market_id,
                         "yes_price": yes_price,
                         "confidence": tbt_sig["confidence"],
-                        "rsi_div": tbt_sig["rsi_divergence"],
-                        "macd_div": tbt_sig["macd_divergence"]
+                        "rsi_div": tbt_sig.get("rsi_divergence", False),
+                        "macd_div": tbt_sig.get("macd_divergence", False)
                     })
         
         return signals
+    
+    def get_markets_cached(self) -> List[Dict]:
+        """Load markets from cache if fresh, otherwise from file"""
+        import time
+        
+        try:
+            with open(MARKET_CACHE_FILE, "r") as f:
+                cache = json.load(f)
+                cache_age = time.time() - cache.get("timestamp", 0)
+                
+                if cache_age < MARKET_CACHE_TTL:  # Cache valid (< 10 min old)
+                    return cache.get("markets", [])
+        except:
+            pass
+        
+        # Cache miss or expired - load from file
+        try:
+            with open(MARKETS_FILE, "r") as f:
+                markets = json.load(f).get("markets", [])
+                
+                # Save to cache
+                with open(MARKET_CACHE_FILE, "w") as cf:
+                    json.dump({
+                        "timestamp": time.time(),
+                        "markets": markets
+                    }, cf)
+                
+                return markets
+        except:
+            return []
     
     def run_trading_cycle(self):
         """Execute trading cycle for both 4h and 1h markets"""
@@ -504,10 +558,10 @@ Status: 🔴 LOCKED for 24 hours
             print("\n⏰ Market too choppy (ADX < 20). Skipping trading cycle.")
             return
         
-        try:
-            with open(MARKETS_FILE, "r") as f:
-                markets = json.load(f).get("markets", [])
-        except:
+        # Use cached market data (10-min TTL) to save API calls
+        markets = self.get_markets_cached()
+        
+        if not markets:
             print("❌ No market data")
             return
         

@@ -47,10 +47,6 @@ class PolymarketTraderV2:
         self.late_entry_sell_threshold = 0.65
         self.late_entry_min_confirmations = 2
         
-        # Strategy 3: Arbitrage - Cross-market correlation and spread plays
-        self.arbitrage_min_spread = 0.20  # Spreads > 0.20 are exploitable
-        self.arbitrage_correlation_threshold = 0.85  # BTC/ETH correlation
-        
         # Timing filters - Only trade during optimal windows
         self.optimal_windows = [
             (14, 16),   # 14:00-16:00 EST (peak volume, tight spreads)
@@ -310,36 +306,6 @@ Trading will resume automatically after 24 hours.
         except:
             return None
     
-    def check_arbitrage_opportunity(self, market1: Dict, market2: Dict) -> Optional[Dict]:
-        """Check for arbitrage between related markets (BTC/ETH correlation)"""
-        m1_id = market1.get("market_id")
-        m2_id = market2.get("market_id")
-        
-        m1_price = market1.get("yes_price")
-        m2_price = market2.get("yes_price")
-        
-        if not m1_price or not m2_price:
-            return None
-        
-        # Calculate spread
-        spread = abs(m1_price - m2_price)
-        
-        # If spread > 0.20, there's an arbitrage opportunity
-        if spread > self.arbitrage_min_spread:
-            return {
-                "market_1": m1_id,
-                "market_2": m2_id,
-                "spread": spread,
-                "action": "ARBITRAGE",
-                "long": m1_id if m1_price < m2_price else m2_id,
-                "short": m2_id if m1_price < m2_price else m1_id,
-                "entry_price": min(m1_price, m2_price),
-                "exit_price": max(m1_price, m2_price),
-                "expected_pnl": spread * 10  # Per $10 position
-            }
-        
-        return None
-    
     def find_buy_opportunities(self, markets: List[Dict]) -> Dict:
         """Find signals from all three strategies"""
         contrarian_ops = []
@@ -404,18 +370,9 @@ Trading will resume automatically after 24 hours.
                             "timeframe": timeframe
                         })
         
-        # Check for arbitrage (BTC vs ETH markets)
-        for i, m1 in enumerate(markets):
-            for m2 in markets[i+1:]:
-                if "bitcoin" in m1.get("question", "").lower() and "ethereum" in m2.get("question", "").lower():
-                    arb = self.check_arbitrage_opportunity(m1, m2)
-                    if arb:
-                        arbitrage_ops.append(arb)
-        
         return {
             "contrarian": sorted(contrarian_ops, key=lambda x: x["signal_strength"], reverse=True),
-            "late_entry": sorted(late_entry_ops, key=lambda x: x["signal_strength"]),
-            "arbitrage": arbitrage_ops
+            "late_entry": sorted(late_entry_ops, key=lambda x: x["signal_strength"])
         }
     
     def open_position(self, market_id: str, yes_price: float, question: str, strategy: str) -> Dict:
@@ -524,11 +481,9 @@ Trading will resume automatically after 24 hours.
         all_ops = self.find_buy_opportunities(markets)
         contrarian_ops = all_ops["contrarian"]
         late_entry_ops = all_ops["late_entry"]
-        arbitrage_ops = all_ops["arbitrage"]
         
         print(f"\n🔴 AI Contrarian: {len(contrarian_ops)} signals (4-hour markets only)")
         print(f"🟡 Late Entry: {len(late_entry_ops)} confirmed (4-hour markets only)")
-        print(f"💱 Arbitrage: {len(arbitrage_ops)} spread opportunities")
         print(f"💰 Current win rate: {self.win_rate:.1%} | Position size scaling: ${self.calculate_position_size('AI Contrarian'):.2f}")
         
         # Execute contrarian (max 1) - check circuit breaker
@@ -554,12 +509,6 @@ Trading will resume automatically after 24 hours.
                 if not has_position:
                     pos = self.open_position(opp["market_id"], opp["yes_price"], opp["question"], opp["strategy"])
                     print(f"✅ Late Entry: ${pos['position_size']:.2f} @ ${opp['yes_price']:.2f}")
-        
-        # Execute arbitrage (max 1) - check circuit breaker
-        if not self.check_circuit_breaker_expired("Arbitrage"):
-            for arb in arbitrage_ops[:1]:
-                pos = self.open_position(arb["long"], arb["entry_price"], f"Arb: {arb['market_1']} vs {arb['market_2']}", "Arbitrage")
-                print(f"✅ Arbitrage: ${pos['position_size']:.2f} | Spread: {arb['spread']:.2f}")
         
         # Check exits
         print(f"\n🔍 Checking {len([t for t in self.trades if t.get('status') == 'OPEN'])} open positions...")

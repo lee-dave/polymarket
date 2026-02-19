@@ -72,5 +72,15 @@
     "open_positions": 3,
     "action_taken": "SKIP",
     "trades_executed": 0
+  },
+  {
+    "id": "run_2026-02-19T13:08:44.001428",
+    "timestamp": "2026-02-19T13:08:15.000000",
+    "strategy": "AI Contrarian",
+    "status": "SKIPPED",
+    "reason": "API credentials not configured",
+    "circuit_breaker": "CLEAR",
+    "consecutive_losses": 0,
+    "trades_executed": 0
   }
 ]

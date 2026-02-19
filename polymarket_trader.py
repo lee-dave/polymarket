@@ -309,6 +309,42 @@ Status: 🔴 LOCKED for 24 hours
         except:
             pass
     
+    def check_coinbase_panic(self) -> bool:
+        """Check if BTC on Coinbase shows panic signals (RSI oversold + price down)"""
+        if not self.indicators:
+            return True  # Allow if indicators unavailable
+        
+        try:
+            candles = self.indicators.get_ohlcv("BTC", timeframe="6h", limit=50)
+            if not candles:
+                return True
+            
+            rsi = self.indicators.calculate_rsi(candles)
+            macd = self.indicators.calculate_macd(candles)
+            
+            # Panic: RSI < 30 (oversold) OR MACD bearish + price falling
+            return rsi < 30 or (macd["direction"] == "BEARISH" and candles[-1][4] < candles[-5][4])
+        except:
+            return True  # Allow if error
+    
+    def check_coinbase_reversal(self) -> bool:
+        """Check if BTC on Coinbase shows reversal signals (RSI bouncing + ADX recovering)"""
+        if not self.indicators:
+            return True
+        
+        try:
+            candles = self.indicators.get_ohlcv("BTC", timeframe="6h", limit=50)
+            if not candles:
+                return True
+            
+            rsi = self.indicators.calculate_rsi(candles)
+            adx = self.indicators.calculate_adx(candles)
+            
+            # Reversal: RSI bouncing from oversold OR ADX > 20 (trend recovering)
+            return (rsi > 35 and candles[-1][4] > candles[-3][4]) or adx > 20
+        except:
+            return True
+    
     def find_signals(self, markets: List[Dict]) -> Dict:
         """Find trading signals from all strategies"""
         signals = {
@@ -333,26 +369,35 @@ Status: 🔴 LOCKED for 24 hours
             self.update_market_history(market_id, yes_price)
             price_hist = self.market_history.get(market_id, {}).get("prices", [])
             
-            # AI Contrarian v3 (panic detection)
+            # AI Contrarian v3 (panic detection) - with Coinbase confirmation
             if self.contrarian and len(price_hist) > 5:
                 panic = self.contrarian.detect_crowd_panic(market_id, yes_price, 100, 
                     [{"price": p, "timestamp": self.market_history[market_id]["timestamps"][i]} 
                      for i, p in enumerate(price_hist)])
-                if panic:
+                
+                # Only signal if Polymarket panic + Coinbase confirms panic
+                if panic and self.check_coinbase_panic():
                     signals["AI Contrarian"].append({
                         "market_id": market_id,
                         "yes_price": yes_price,
-                        "confidence": panic["confidence"],
-                        "reason": panic["reasoning"]
+                        "confidence": panic["confidence"] * 1.1,  # Boost confidence with Coinbase confirmation
+                        "reason": f"{panic['reasoning']} + Coinbase BTC panic confirmed"
                     })
             
-            # Late Entry (reversal confirmation)
+            # Late Entry (reversal confirmation) - with Coinbase confirmation
             if yes_price < 0.35 and len(price_hist) >= 3:
-                if all(price_hist[i] <= price_hist[i+1] for i in range(-3, -1)):
+                # Check Polymarket reversal
+                polymarket_reversing = all(price_hist[i] <= price_hist[i+1] for i in range(-3, -1))
+                
+                # Check Coinbase reversal
+                coinbase_reversing = self.check_coinbase_reversal()
+                
+                # Only signal if both Polymarket + Coinbase confirm reversal
+                if polymarket_reversing and coinbase_reversing:
                     signals["Late Entry"].append({
                         "market_id": market_id,
                         "yes_price": yes_price,
-                        "confidence": 0.75
+                        "confidence": 0.85  # Higher confidence with dual confirmation
                     })
             
             # TBO Trend - Real CCXT Coinbase OHLCV indicators
@@ -415,12 +460,53 @@ Status: 🔴 LOCKED for 24 hours
         signals = self.find_signals(markets)
         
         for strategy, signal_list in signals.items():
-            if not self.check_circuit_breaker_expired(strategy):
+            # Skip if circuit breaker active
+            if self.check_circuit_breaker_expired(strategy):
                 continue
             
-            if signal_list:
-                pos_size = self.get_position_size(strategy)
-                print(f"\n{strategy}: {len(signal_list)} signals | Capital: ${self.capital_state[strategy]['current']:.2f} | Position: ${pos_size:.2f}")
+            if not signal_list:
+                continue
+            
+            pos_size = self.get_position_size(strategy)
+            
+            # Strategy-specific execution logic
+            max_positions = {"AI Contrarian": 1, "Late Entry": 2, "TBO Trend": 1, "TBT Divergence": 1, "Execution Confidence": 1}
+            max_pos = max_positions.get(strategy, 1)
+            
+            print(f"\n{strategy}: {len(signal_list)} signals")
+            
+            # Open positions (up to max)
+            opened = 0
+            for signal in signal_list[:max_pos]:
+                market_id = signal.get("market_id")
+                yes_price = signal.get("yes_price")
+                question = signal.get("question", "")
+                
+                # Check if already have position in this market
+                has_position = any(
+                    t.get("market_id") == market_id and t.get("status") == "OPEN" and t.get("strategy") == strategy
+                    for t in self.trades
+                )
+                
+                if not has_position and opened < max_pos:
+                    pos = self.open_position(market_id, yes_price, strategy, question)
+                    print(f"  ✅ {strategy} @ ${yes_price:.2f} | Size: ${pos_size:.2f} | Confidence: {signal.get('confidence', 0):.0%}")
+                    opened += 1
+            
+            # Check for exits (YES > sell threshold)
+            sell_threshold = {"AI Contrarian": 0.70, "Late Entry": 0.65, "TBO Trend": 0.65, "TBT Divergence": 0.65, "Execution Confidence": 0.65}
+            threshold = sell_threshold.get(strategy, 0.65)
+            
+            for trade in self.trades:
+                if trade.get("status") != "OPEN" or trade.get("strategy") != strategy:
+                    continue
+                
+                market_id = trade.get("market_id")
+                yes_price = self.get_market_price(market_id)
+                
+                if yes_price and yes_price > threshold:
+                    self.close_position(trade.get("id"), yes_price)
+                    print(f"  ❌ {strategy} closed @ ${yes_price:.2f} | P/L: ${trade.get('pnl', 0):.2f}")
 
 
 if __name__ == "__main__":

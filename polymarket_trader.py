@@ -5,7 +5,7 @@ Polymarket Paper Trading Engine v2 - Advanced Multi-Strategy with Smart AI Contr
 
 import requests
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import uuid
 from math import sqrt
@@ -144,22 +144,48 @@ class PolymarketTraderV2:
             json.dump(self.trades, f, indent=2, default=str)
     
     def load_circuit_breaker(self) -> Dict:
-        """Load circuit breaker state"""
+        """Load circuit breaker state (per-strategy)"""
         try:
             with open(CIRCUIT_BREAKER_FILE, "r") as f:
                 return json.load(f)
         except FileNotFoundError:
             return {
-                "consecutive_losses": 0,
-                "last_loss_time": None,
-                "circuit_broken": False,
-                "circuit_break_until": None
+                "AI Contrarian": {"consecutive_losses": 0, "circuit_broken": False, "broken_until": None},
+                "Late Entry": {"consecutive_losses": 0, "circuit_broken": False, "broken_until": None},
+                "Arbitrage": {"consecutive_losses": 0, "circuit_broken": False, "broken_until": None}
             }
     
     def save_circuit_breaker(self):
         """Save circuit breaker state"""
         with open(CIRCUIT_BREAKER_FILE, "w") as f:
             json.dump(self.circuit_breaker_state, f, indent=2, default=str)
+    
+    def check_circuit_breaker_expired(self, strategy: str):
+        """Check if circuit breaker has expired (24h)"""
+        if strategy not in self.circuit_breaker_state:
+            return False
+        
+        state = self.circuit_breaker_state[strategy]
+        if not state.get("circuit_broken"):
+            return False
+        
+        broken_until = state.get("broken_until")
+        if not broken_until:
+            return False
+        
+        try:
+            broken_time = datetime.fromisoformat(broken_until)
+            if datetime.now() > broken_time:
+                # Reset circuit breaker
+                state["consecutive_losses"] = 0
+                state["circuit_broken"] = False
+                state["broken_until"] = None
+                self.save_circuit_breaker()
+                return False
+        except:
+            pass
+        
+        return state.get("circuit_broken", False)
     
     def load_market_history(self) -> Dict:
         """Load market price history"""
@@ -189,25 +215,44 @@ class PolymarketTraderV2:
         
         self.save_market_history()
     
-    def check_circuit_breaker(self) -> bool:
-        """Check if trading is allowed"""
-        return not self.circuit_breaker_state["circuit_broken"]
+    def check_circuit_breaker(self, strategy: str) -> bool:
+        """Check if strategy is allowed to trade"""
+        return not self.check_circuit_breaker_expired(strategy)
     
-    def record_loss(self):
-        """Record a loss and update circuit breaker"""
-        self.circuit_breaker_state["consecutive_losses"] += 1
-        self.circuit_breaker_state["last_loss_time"] = datetime.now().isoformat()
+    def record_loss(self, strategy: str):
+        """Record a loss for strategy"""
+        if strategy not in self.circuit_breaker_state:
+            self.circuit_breaker_state[strategy] = {
+                "consecutive_losses": 0,
+                "circuit_broken": False,
+                "broken_until": None
+            }
         
-        if self.circuit_breaker_state["consecutive_losses"] >= self.circuit_breaker_threshold:
-            self.circuit_breaker_state["circuit_broken"] = True
-            self.circuit_breaker_state["circuit_break_until"] = datetime.now().isoformat()
+        state = self.circuit_breaker_state[strategy]
+        state["consecutive_losses"] += 1
+        
+        if state["consecutive_losses"] >= self.circuit_breaker_threshold:
+            state["circuit_broken"] = True
+            # 24 hour lockout
+            broken_until = datetime.now() + timedelta(hours=24)
+            state["broken_until"] = broken_until.isoformat()
         
         self.save_circuit_breaker()
     
-    def record_win(self):
-        """Record a win and reset circuit breaker"""
-        self.circuit_breaker_state["consecutive_losses"] = 0
-        self.circuit_breaker_state["circuit_broken"] = False
+    def record_win(self, strategy: str):
+        """Record a win for strategy - reset losses"""
+        if strategy not in self.circuit_breaker_state:
+            self.circuit_breaker_state[strategy] = {
+                "consecutive_losses": 0,
+                "circuit_broken": False,
+                "broken_until": None
+            }
+        
+        state = self.circuit_breaker_state[strategy]
+        state["consecutive_losses"] = 0
+        state["circuit_broken"] = False
+        state["broken_until"] = None
+        
         self.save_circuit_breaker()
     
     def get_market_price(self, market_id: str) -> Optional[float]:
@@ -369,6 +414,7 @@ class PolymarketTraderV2:
                 entry = trade["entry_price"]
                 size = trade["position_size"]
                 profit = (exit_price - entry) * (size / entry)
+                strategy = trade.get("strategy", "Unknown")
                 
                 trade["exit_price"] = exit_price
                 trade["exit_time"] = datetime.now().isoformat()
@@ -378,9 +424,9 @@ class PolymarketTraderV2:
                 self.save_trades()
                 
                 if profit < 0:
-                    self.record_loss()
+                    self.record_loss(strategy)
                 else:
-                    self.record_win()
+                    self.record_win(strategy)
                 
                 # Recalculate win rate for next cycle
                 self.win_rate = self.calculate_win_rate()
@@ -420,10 +466,17 @@ class PolymarketTraderV2:
             print(f"   Next optimal: 14:00-16:00 or 22:00-02:00 EST")
             return
         
-        # Check circuit breaker
-        if not self.check_circuit_breaker():
-            print("\n⛔ Circuit breaker is ON. Trading disabled.")
-            return
+        # Check per-strategy circuit breakers
+        breakers_active = []
+        for strategy in ["AI Contrarian", "Late Entry", "Arbitrage"]:
+            if self.check_circuit_breaker_expired(strategy):
+                breakers_active.append(strategy)
+        
+        if breakers_active:
+            print(f"\n⛔ Circuit breaker ON for: {', '.join(breakers_active)}")
+            print(f"   Remaining strategies: {', '.join([s for s in ['AI Contrarian', 'Late Entry', 'Arbitrage'] if s not in breakers_active])}")
+            if not [s for s in ['AI Contrarian', 'Late Entry', 'Arbitrage'] if s not in breakers_active]:
+                return
         
         # Load markets
         try:
@@ -445,32 +498,35 @@ class PolymarketTraderV2:
         print(f"💱 Arbitrage: {len(arbitrage_ops)} spread opportunities")
         print(f"💰 Current win rate: {self.win_rate:.1%} | Position size scaling: ${self.calculate_position_size('AI Contrarian'):.2f}")
         
-        # Execute contrarian (max 1)
-        for opp in contrarian_ops[:1]:
-            has_position = any(
-                t.get("market_id") == opp["market_id"] and t.get("status") == "OPEN"
-                for t in self.trades
-            )
-            if not has_position:
-                pos = self.open_position(opp["market_id"], opp["yes_price"], opp["question"], opp["strategy"])
-                print(f"\n✅ Contrarian: ${pos['position_size']:.2f} @ ${opp['yes_price']:.2f}")
-                print(f"   Panic detected: {opp.get('panic_reason', 'N/A')}")
-                print(f"   Confidence: {opp.get('signal_strength', 0):.1%}")
+        # Execute contrarian (max 1) - check circuit breaker
+        if not self.check_circuit_breaker_expired("AI Contrarian"):
+            for opp in contrarian_ops[:1]:
+                has_position = any(
+                    t.get("market_id") == opp["market_id"] and t.get("status") == "OPEN"
+                    for t in self.trades
+                )
+                if not has_position:
+                    pos = self.open_position(opp["market_id"], opp["yes_price"], opp["question"], opp["strategy"])
+                    print(f"\n✅ Contrarian: ${pos['position_size']:.2f} @ ${opp['yes_price']:.2f}")
+                    print(f"   Panic detected: {opp.get('panic_reason', 'N/A')}")
+                    print(f"   Confidence: {opp.get('signal_strength', 0):.1%}")
         
-        # Execute late entry (max 2)
-        for opp in late_entry_ops[:2]:
-            has_position = any(
-                t.get("market_id") == opp["market_id"] and t.get("status") == "OPEN"
-                for t in self.trades
-            )
-            if not has_position:
-                pos = self.open_position(opp["market_id"], opp["yes_price"], opp["question"], opp["strategy"])
-                print(f"✅ Late Entry: ${pos['position_size']:.2f} @ ${opp['yes_price']:.2f}")
+        # Execute late entry (max 2) - check circuit breaker
+        if not self.check_circuit_breaker_expired("Late Entry"):
+            for opp in late_entry_ops[:2]:
+                has_position = any(
+                    t.get("market_id") == opp["market_id"] and t.get("status") == "OPEN"
+                    for t in self.trades
+                )
+                if not has_position:
+                    pos = self.open_position(opp["market_id"], opp["yes_price"], opp["question"], opp["strategy"])
+                    print(f"✅ Late Entry: ${pos['position_size']:.2f} @ ${opp['yes_price']:.2f}")
         
-        # Execute arbitrage (max 1)
-        for arb in arbitrage_ops[:1]:
-            pos = self.open_position(arb["long"], arb["entry_price"], f"Arb: {arb['market_1']} vs {arb['market_2']}", "Arbitrage")
-            print(f"✅ Arbitrage: ${pos['position_size']:.2f} | Spread: {arb['spread']:.2f}")
+        # Execute arbitrage (max 1) - check circuit breaker
+        if not self.check_circuit_breaker_expired("Arbitrage"):
+            for arb in arbitrage_ops[:1]:
+                pos = self.open_position(arb["long"], arb["entry_price"], f"Arb: {arb['market_1']} vs {arb['market_2']}", "Arbitrage")
+                print(f"✅ Arbitrage: ${pos['position_size']:.2f} | Spread: {arb['spread']:.2f}")
         
         # Check exits
         print(f"\n🔍 Checking {len([t for t in self.trades if t.get('status') == 'OPEN'])} open positions...")

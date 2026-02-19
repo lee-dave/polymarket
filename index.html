@@ -313,8 +313,8 @@
             <h1>📊 Polymarket Trading Dashboard</h1>
             <p class="timestamp">AI-Powered Prediction Market Trading | Last updated: <span id="timestamp">--:--:--</span></p>
             <div class="timeframe-toggle">
-                <button class="toggle-btn active" id="btn-4h" onclick="switchTimeframe('4h')">4H Markets</button>
-                <button class="toggle-btn" id="btn-1h" onclick="switchTimeframe('1h')">1H Markets</button>
+                <button class="toggle-btn active" id="btn-4h">4H Markets</button>
+                <button class="toggle-btn" id="btn-1h">1H Markets</button>
             </div>
         </header>
 
@@ -793,6 +793,13 @@
             });
         }
 
+        // Attach button listeners (immediately, script is at end of body)
+        const btn4h = document.getElementById('btn-4h');
+        const btn1h = document.getElementById('btn-1h');
+        
+        if (btn4h) btn4h.addEventListener('click', function() { window.switchTimeframe('4h'); });
+        if (btn1h) btn1h.addEventListener('click', function() { window.switchTimeframe('1h'); });
+        
         // Initial load
         window.loadTradeData();
 

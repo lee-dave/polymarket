@@ -205,6 +205,77 @@
             padding-top: 20px;
             border-top: 1px solid #334155;
         }
+
+        .summary-section {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 30px;
+            margin: 40px 0;
+        }
+
+        .summary-section h2 {
+            color: #93c5fd;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .summary-table thead {
+            background: rgba(15, 23, 42, 0.8);
+            border-bottom: 2px solid #334155;
+        }
+
+        .summary-table th {
+            padding: 15px;
+            text-align: left;
+            color: #93c5fd;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-right: 1px solid #334155;
+        }
+
+        .summary-table th:last-child {
+            border-right: none;
+        }
+
+        .summary-table td {
+            padding: 15px;
+            border-bottom: 1px solid #334155;
+            border-right: 1px solid #334155;
+        }
+
+        .summary-table td:last-child {
+            border-right: none;
+        }
+
+        .summary-table tr:hover {
+            background: rgba(30, 41, 59, 0.5);
+        }
+
+        .strategy-name {
+            font-weight: 600;
+            color: #e2e8f0;
+        }
+
+        .value-positive {
+            color: #4ade80;
+            font-weight: 600;
+        }
+
+        .value-negative {
+            color: #f87171;
+            font-weight: 600;
+        }
+
+        .value-neutral {
+            color: #93c5fd;
+        }
     </style>
 </head>
 <body>
@@ -239,6 +310,28 @@
                 <div class="metric neutral" id="allTrades">0</div>
                 <div class="subtext" id="avgTradeValue">$0 per trade</div>
             </div>
+        </div>
+
+        <!-- Summary Table -->
+        <div class="summary-section">
+            <h2>📊 The Numbers</h2>
+            <table class="summary-table">
+                <thead>
+                    <tr>
+                        <th>Strategy</th>
+                        <th>Capital</th>
+                        <th>Current Value</th>
+                        <th>P/L</th>
+                        <th>Trades</th>
+                        <th>Win Rate</th>
+                    </tr>
+                </thead>
+                <tbody id="summary-body">
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 30px; color: #64748b;">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
 
         <!-- Strategy 1: AI Contrarian -->
@@ -349,6 +442,7 @@
             // Filter trades by strategy
             const contrarian = trades.filter(t => t.strategy === 'AI Contrarian');
             const lateEntry = trades.filter(t => t.strategy === 'Late Entry');
+            const arbitrage = trades.filter(t => t.strategy === 'Arbitrage');
             
             // Calculate overall stats
             const closedTrades = trades.filter(t => t.status === 'CLOSED');
@@ -373,6 +467,9 @@
             // Update Contrarian stats
             updateStrategyStats('contrarian', contrarian);
             updateStrategyStats('lateentry', lateEntry);
+            
+            // Update summary table
+            updateSummaryTable(contrarian, lateEntry, arbitrage);
             
             // Update tables
             populateTradesTable('contrarian-trades', contrarian);
@@ -401,6 +498,66 @@
             document.getElementById(`${strategyId}-wr`).textContent = `${wr}%`;
             document.getElementById(`${strategyId}-roi`).className = `metric ${roi >= 0 ? 'positive' : 'negative'}`;
             document.getElementById(`${strategyId}-roi`).textContent = `${roi}%`;
+        }
+
+        function updateSummaryTable(contrarian, lateEntry, arbitrage) {
+            const tbody = document.getElementById('summary-body');
+            tbody.innerHTML = '';
+
+            const strategies = [
+                { name: 'AI Contrarian', trades: contrarian, capital: 10 },
+                { name: 'Late Entry', trades: lateEntry, capital: 10 },
+                { name: 'Arbitrage', trades: arbitrage, capital: 10 }
+            ];
+
+            strategies.forEach(strat => {
+                if (strat.trades.length === 0) return;
+
+                const closed = strat.trades.filter(t => t.status === 'CLOSED');
+                const open = strat.trades.filter(t => t.status === 'OPEN');
+                const pnl = closed.reduce((sum, t) => sum + (t.pnl || 0), 0);
+                const wins = closed.filter(t => (t.pnl || 0) > 0).length;
+                const wr = closed.length > 0 ? (wins / closed.length * 100).toFixed(1) : 0;
+                const current = strat.capital + pnl;
+
+                const row = document.createElement('tr');
+                const pnlClass = pnl > 0 ? 'value-positive' : (pnl < 0 ? 'value-negative' : 'value-neutral');
+                const wrClass = wr > 50 ? 'value-positive' : (wr < 50 ? 'value-negative' : 'value-neutral');
+
+                row.innerHTML = `
+                    <td><span class="strategy-name">${strat.name}</span></td>
+                    <td>$${strat.capital.toFixed(0)}</td>
+                    <td class="value-neutral">$${current.toFixed(2)}</td>
+                    <td class="${pnlClass}">${pnl > 0 ? '+' : ''}$${pnl.toFixed(2)}</td>
+                    <td class="value-neutral">${closed.length + open.length}</td>
+                    <td class="${wrClass}">${wr}%</td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            // Add total row
+            const allTrades = [...contrarian, ...lateEntry, ...arbitrage];
+            const allClosed = allTrades.filter(t => t.status === 'CLOSED');
+            const totalPnL = allClosed.reduce((sum, t) => sum + (t.pnl || 0), 0);
+            const totalWins = allClosed.filter(t => (t.pnl || 0) > 0).length;
+            const totalWR = allClosed.length > 0 ? (totalWins / allClosed.length * 100).toFixed(1) : 0;
+            const totalCurrent = 30 + totalPnL;
+
+            const totalRow = document.createElement('tr');
+            totalRow.style.borderTop = '2px solid #334155';
+            totalRow.style.fontWeight = 'bold';
+            const totalPnLClass = totalPnL > 0 ? 'value-positive' : (totalPnL < 0 ? 'value-negative' : 'value-neutral');
+            const totalWRClass = totalWR > 50 ? 'value-positive' : (totalWR < 50 ? 'value-negative' : 'value-neutral');
+
+            totalRow.innerHTML = `
+                <td><span class="strategy-name">TOTAL</span></td>
+                <td>$30</td>
+                <td class="value-neutral">$${totalCurrent.toFixed(2)}</td>
+                <td class="${totalPnLClass}">${totalPnL > 0 ? '+' : ''}$${totalPnL.toFixed(2)}</td>
+                <td class="value-neutral">${allClosed.length + allTrades.filter(t => t.status === 'OPEN').length}</td>
+                <td class="${totalWRClass}">${totalWR}%</td>
+            `;
+            tbody.appendChild(totalRow);
         }
 
         function populateTradesTable(tableId, trades) {

@@ -313,8 +313,8 @@
             <h1>📊 Polymarket Trading Dashboard</h1>
             <p class="timestamp">AI-Powered Prediction Market Trading | Last updated: <span id="timestamp">--:--:--</span></p>
             <div class="timeframe-toggle">
-                <button class="toggle-btn active" onclick="switchTimeframe('4h')">4H Markets</button>
-                <button class="toggle-btn" onclick="switchTimeframe('1h')">1H Markets</button>
+                <button class="toggle-btn active" id="btn-4h" onclick="switchTimeframe('4h', this)">4H Markets</button>
+                <button class="toggle-btn" id="btn-1h" onclick="switchTimeframe('1h', this)">1H Markets</button>
             </div>
         </header>
 
@@ -585,14 +585,16 @@
     <script>
         let currentTimeframe = "4h";
 
-        function switchTimeframe(timeframe) {
+        function switchTimeframe(timeframe, buttonEl) {
             currentTimeframe = timeframe;
             
             // Update button states
             document.querySelectorAll('.toggle-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
-            event.target.classList.add('active');
+            
+            // Highlight clicked button
+            buttonEl.classList.add('active');
             
             // Reload data
             loadTradeData();
